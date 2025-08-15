@@ -52,6 +52,7 @@ detect_platform() {
 # Get Claude configuration file path with fallback
 get_claude_config_path() {
     local primary_config="$HOME/.claude/.claude.json"
+    local alternate_config="$HOME/.config/claude/.claude.json"
     local fallback_config="$HOME/.claude.json"
     
     # Check primary location first
@@ -59,6 +60,15 @@ get_claude_config_path() {
         # Verify it has valid oauthAccount structure
         if jq -e '.oauthAccount' "$primary_config" >/dev/null 2>&1; then
             echo "$primary_config"
+            return
+        fi
+    fi
+    
+    # Check alternate location
+    if [[ -f "$alternate_config" ]]; then
+        # Verify it has valid oauthAccount structure
+        if jq -e '.oauthAccount' "$alternate_config" >/dev/null 2>&1; then
+            echo "$alternate_config"
             return
         fi
     fi
@@ -200,6 +210,8 @@ read_credentials() {
         linux|wsl)
             if [[ -f "$HOME/.claude/.credentials.json" ]]; then
                 cat "$HOME/.claude/.credentials.json"
+            elif [[ -f "$HOME/.config/claude/.credentials.json" ]]; then
+                cat "$HOME/.config/claude/.credentials.json"
             else
                 echo ""
             fi
@@ -218,9 +230,21 @@ write_credentials() {
             security add-generic-password -U -s "Claude Code-credentials" -a "$USER" -w "$credentials" 2>/dev/null
             ;;
         linux|wsl)
-            mkdir -p "$HOME/.claude"
-            printf '%s' "$credentials" > "$HOME/.claude/.credentials.json"
-            chmod 600 "$HOME/.claude/.credentials.json"
+            # Determine which credentials path to use based on config location
+            local config_path
+            config_path=$(get_claude_config_path)
+            
+            if [[ "$config_path" == "$HOME/.config/claude/.claude.json" ]]; then
+                # Use alternate location
+                mkdir -p "$HOME/.config/claude"
+                printf '%s' "$credentials" > "$HOME/.config/claude/.credentials.json"
+                chmod 600 "$HOME/.config/claude/.credentials.json"
+            else
+                # Use default location
+                mkdir -p "$HOME/.claude"
+                printf '%s' "$credentials" > "$HOME/.claude/.credentials.json"
+                chmod 600 "$HOME/.claude/.credentials.json"
+            fi
             ;;
     esac
 }
